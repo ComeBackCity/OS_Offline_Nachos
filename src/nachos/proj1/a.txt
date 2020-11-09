@@ -1,0 +1,9 @@
+nachos 5.0j initializing... config interrupt timer user-check grader
+Listener thread 1 waiting for a speaker
+Speaker thread 1 spoke 6373
+Speaker thread 1 Waking up a listener
+Listener thread 1 got a speaker
+Listener thread 1 listened 6373
+Speaker thread 2 spoke 5734
+Speaker thread 2 Waking up a listener
+Listener thread 2 waiting 1
