@@ -136,7 +136,7 @@ public class Communicator {
     }
 
     private final Lock lock = new Lock();
-    private final Condition cond = new Condition(lock);
+    private final Condition2 cond = new Condition2(lock);
     private final Condition2 multiSpeaker = new Condition2(lock);
     private final Condition2 multiListener = new Condition2(lock);
     private final Condition2 pairDone = new Condition2(lock);

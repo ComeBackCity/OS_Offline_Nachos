@@ -27,6 +27,19 @@ public class UserProcess {
 	pageTable = new TranslationEntry[numPhysPages];
 	for (int i=0; i<numPhysPages; i++)
 	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+
+		//fileDescriptors = new OpenFile[16];
+		lock = new Lock();
+		boolean initStatus = Machine.interrupt().disable();
+		lock.acquire();
+		counter++;
+		processID = counter;
+		lock.release();
+		/*fileDescriptors[0] = UserKernel.console.openForReading();
+		fileDescriptors[1] = UserKernel.console.openForWriting();*/
+		stdin = UserKernel.console.openForReading();
+		stdout = UserKernel.console.openForWriting();
+		Machine.interrupt().restore(initStatus);
     }
     
     /**
@@ -340,18 +353,77 @@ public class UserProcess {
      */
     private int handleHalt() {
 
+    	if(processID != 1)
+    		return -1;
 	Machine.halt();
 	
 	Lib.assertNotReached("Machine.halt() did not halt machine!");
 	return 0;
     }
 
-    private int handleRead(){
-    	return 0;
+    private int handleRead(int fileDescriptor, int bufferAddress, int size){
+		//System.out.println(fileDescriptor);
+    	OpenFile file;
+		/*if(fileDescriptor < 0 || fileDescriptor > 16){
+			return -1;
+		}
+		else if(size < 0){
+			return -1;
+		}
+		else if(fileDescriptors[fileDescriptor] == null){
+			return -1;
+		}
+		else {
+			file = fileDescriptors[fileDescriptor];
+		}*/
+
+		if(fileDescriptor != 0 || size < 0 || stdin == null){
+			return -1;
+		}
+		file = stdin;
+
+		int length, count;
+		byte[] buffer = new byte[size];
+		length = file.read(buffer, 0, size);
+
+		if(length == -1){
+			return -1;
+		}
+		count = writeVirtualMemory(bufferAddress, buffer, 0, size);
+    	return count;
 	}
 
-	private int handleWrite(){
-    	return 0;
+	private int handleWrite(int fileDescriptor, int bufferAddress, int size){
+		//System.out.println(fileDescriptor);
+		OpenFile file;
+		/*if(fileDescriptor < 0 || fileDescriptor > 16){
+			return -1;
+		}
+		else if(size < 0){
+			return -1;
+		}
+		else if(fileDescriptors[fileDescriptor] == null){
+			return -1;
+		}
+		else {
+			file = fileDescriptors[fileDescriptor];
+		}*/
+
+		if(fileDescriptor != 1 || size < 0 || stdout == null){
+			return -1;
+		}
+
+		file = stdout;
+
+		int length, count;
+		byte[] buffer = new byte[size];
+		length = readVirtualMemory(bufferAddress, buffer, 0, size);
+		if(length == -1){
+			return -1;
+		}
+
+		count = file.write(buffer, 0, size);
+		return count;
 	}
 
 
@@ -401,10 +473,10 @@ public class UserProcess {
 	    return handleHalt();
 
 		case syscallRead:
-			return handleRead();
+			return handleRead(a0,a1,a2);
 
 		case syscallWrite:
-			return handleWrite();
+			return handleWrite(a0, a1, a2);
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -459,4 +531,11 @@ public class UserProcess {
 	
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
+
+    //private OpenFile[] fileDescriptors ;
+	private OpenFile stdin;
+	private OpenFile stdout;
+    private Lock lock;
+    private static int counter = 0;
+    private int processID = 0;
 }

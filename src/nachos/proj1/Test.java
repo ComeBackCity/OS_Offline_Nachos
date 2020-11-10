@@ -12,11 +12,11 @@ public class Test {
     }
 
     public static void test(){
-        /*new JoinTest().test1();
+        new JoinTest().test1();
         new JoinTest().test2();
-        new Condition2Test().test();*/
+        new Condition2Test().test();
         new AlarmTest().test();
-        //new CommunicatorTest().test();
+        new CommunicatorTest().test();
     }
 }
 
@@ -177,17 +177,17 @@ class AlarmTest {
 
         //Alarm alarm = new Alarm();
         Alarm alarm = ThreadedKernel.alarm;
-        //KThread t1 = new KThread(new AlarmClass(time1, alarm)).setName("Alarm thread 1");
+        KThread t1 = new KThread(new AlarmClass(time1, alarm)).setName("Alarm thread 1");
         KThread t2 = new KThread(new AlarmClass(time2, alarm)).setName("Alarm thread 2");
-        //KThread t3 = new KThread(new AlarmClass(time3, alarm)).setName("Alarm thread 3");
+        KThread t3 = new KThread(new AlarmClass(time3, alarm)).setName("Alarm thread 3");
 
         alarm.waitUntil(time1);
-        //t1.fork();
+        t1.fork();
         t2.fork();
-        //t3.fork();
-        //t1.join();
-        //t2.join();
-        //t3.join();
+        t3.fork();
+        t1.join();
+        t2.join();
+        t3.join();
         System.out.println("\nFinishing ALARM test");
         System.out.println("-----------------------\n");
     }
