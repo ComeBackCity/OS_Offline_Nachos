@@ -2,7 +2,6 @@ package nachos.userprog;
 
 import nachos.machine.*;
 import nachos.threads.*;
-import nachos.userprog.*;
 
 import java.io.EOFException;
 
@@ -144,14 +143,57 @@ public class UserProcess {
 				 int length) {
 	Lib.assertTrue(offset >= 0 && length >= 0 && offset+length <= data.length);
 
-	byte[] memory = Machine.processor().getMemory();
-	
-	// for now, just assume that virtual addresses equal physical addresses
-	if (vaddr < 0 || vaddr >= memory.length)
-	    return 0;
+	if(numPages == 0 || pageTable == null){
+		return 0;
+	}
 
-	int amount = Math.min(length, memory.length-vaddr);
-	System.arraycopy(memory, vaddr, data, offset, amount);
+	byte[] memory = Machine.processor().getMemory();
+
+		int amount = 0;
+		int readAmount = 0;
+		int startPage = Processor.pageFromAddress(vaddr);
+		int endPage = Processor.pageFromAddress(vaddr + length - 1);
+		int endVaddr = vaddr + length - 1;
+
+	// for now, just assume that virtual addresses equal physical addresses
+	/*if (vaddr < 0 || vaddr >= memory.length)
+	    return 0;*/
+
+		if(vaddr < 0 || endVaddr > Processor.makeAddress(numPages-1, pageSize-1))
+			return 0;
+
+	/*int amount = Math.min(length, memory.length-vaddr);
+	System.arraycopy(memory, vaddr, data, offset, amount);*/
+
+		for (int i= startPage; i<= endPage; i++){
+			if(i>pageTable.length || !pageTable[i].valid)
+				break;
+
+			int startAddress = Processor.makeAddress(i,0);
+			int endAddress = Processor.makeAddress(i,pageSize-1);
+			readAmount = 0;
+			int addressOffset = 0;
+			if (vaddr >= startAddress && endVaddr <= endAddress){
+				addressOffset = vaddr - startAddress;
+				readAmount = endVaddr - vaddr + 1;
+			}
+			else if (vaddr < startAddress && endVaddr <= endAddress){
+				addressOffset = 0;
+				readAmount = endVaddr - startAddress + 1;
+			}
+			else if(vaddr >= startAddress && endVaddr > endAddress){
+				addressOffset = vaddr - startAddress;
+				readAmount = endAddress - vaddr + 1;
+			}
+			else if(vaddr < startAddress && endVaddr > endAddress){
+				addressOffset = 0;
+				readAmount = endAddress - startAddress + 1;
+			}
+			int ppn = pageTable[i].ppn;
+			int physicalAddress = Processor.makeAddress(ppn, addressOffset);
+			System.arraycopy(memory, physicalAddress, data, amount + offset, readAmount);
+			amount += readAmount;
+		}
 
 	return amount;
     }
@@ -185,17 +227,58 @@ public class UserProcess {
      */
     public int writeVirtualMemory(int vaddr, byte[] data, int offset,
 				  int length) {
+
 	Lib.assertTrue(offset >= 0 && length >= 0 && offset+length <= data.length);
 
+	if(numPages > pageTable.length){
+		return 0;
+	}
+
 	byte[] memory = Machine.processor().getMemory();
-	
+
+		int amount = 0;
+		int writtenAmount = 0;
+		int startPage = Processor.pageFromAddress(vaddr);
+		int endPage = Processor.pageFromAddress(vaddr + length - 1);
+		int endVaddr = vaddr + length - 1;
+
+
 	// for now, just assume that virtual addresses equal physical addresses
-	if (vaddr < 0 || vaddr >= memory.length)
-	    return 0;
+		if(vaddr < 0 || endVaddr > Processor.makeAddress(numPages-1, pageSize-1))
+			return 0;
 
-	int amount = Math.min(length, memory.length-vaddr);
-	System.arraycopy(data, offset, memory, vaddr, amount);
+	/*int amount = Math.min(length, memory.length-vaddr);
+	System.arraycopy(data, offset, memory, vaddr, amount);*/
 
+		for (int i= startPage; i<= endPage; i++){
+			if(i>pageTable.length || pageTable[i].readOnly || !pageTable[i].valid)
+				break;
+
+			int startAddress = Processor.makeAddress(i,0);
+			int endAddress = Processor.makeAddress(i,pageSize-1);
+			writtenAmount = 0;
+			int addressOffset = 0;
+			if (vaddr >= startAddress && endVaddr <= endAddress){
+				addressOffset = vaddr - startAddress;
+				writtenAmount = endVaddr - vaddr + 1;
+			}
+			else if (vaddr < startAddress && endVaddr <= endAddress){
+				addressOffset = 0;
+				writtenAmount = endVaddr - startAddress + 1;
+			}
+			else if(vaddr >= startAddress && endVaddr > endAddress){
+				addressOffset = vaddr - startAddress;
+				writtenAmount = endAddress - vaddr + 1;
+			}
+			else if(vaddr < startAddress && endVaddr > endAddress){
+				addressOffset = 0;
+				writtenAmount = endAddress - startAddress + 1;
+			}
+			int ppn = pageTable[i].ppn;
+			int physicalAddress = Processor.makeAddress(ppn, addressOffset);
+			System.arraycopy(data, amount + offset, memory, physicalAddress, writtenAmount);
+			amount += writtenAmount;
+		}
 	return amount;
     }
 
@@ -310,9 +393,11 @@ public class UserProcess {
 
 	    for (int i=0; i<section.getLength(); i++) {
 		int vpn = section.getFirstVPN()+i;
+		int ppn = UserKernel.assign();
+		pageTable[vpn] = new TranslationEntry(vpn, ppn, true, section.isReadOnly(), false, false);
 
 		// for now, just assume virtual addresses=physical addresses
-		section.loadPage(i, vpn);
+		section.loadPage(i, ppn);
 	    }
 	}
 	
@@ -323,6 +408,11 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
+		for (int i=0; i<pageTable.length; i++){
+			int ppn = pageTable[i].ppn;
+			UserKernel.freePage(ppn);
+			pageTable[i] = new TranslationEntry(i, i, false, false, false, false);
+		}
     }    
 
     /**
@@ -538,4 +628,6 @@ public class UserProcess {
     private Lock lock;
     private static int counter = 0;
     private int processID = 0;
+
+    private final int stackPageSize = 8;
 }
