@@ -4,6 +4,8 @@ import nachos.machine.*;
 import nachos.threads.*;
 
 import java.io.EOFException;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Encapsulates the state of a user process that is not contained in its
@@ -33,6 +35,7 @@ public class UserProcess {
 		lock.acquire();
 		counter++;
 		processID = counter;
+		running++;
 		lock.release();
 		/*fileDescriptors[0] = UserKernel.console.openForReading();
 		fileDescriptors[1] = UserKernel.console.openForWriting();*/
@@ -64,7 +67,8 @@ public class UserProcess {
 	if (!load(name, args))
 	    return false;
 	
-	new UThread(this).setName(name).fork();
+	myThread = (UThread) new UThread(this).setName(name);
+	myThread.fork();
 
 	return true;
     }
@@ -230,6 +234,8 @@ public class UserProcess {
 
 	Lib.assertTrue(offset >= 0 && length >= 0 && offset+length <= data.length);
 
+		//System.out.println("vaddr in wvm " + vaddr);
+		//Lib.debug(dbgProcess, "\n vaddr " + vaddr);
 	if(numPages > pageTable.length){
 		return 0;
 	}
@@ -453,6 +459,8 @@ public class UserProcess {
 
     private int handleRead(int fileDescriptor, int bufferAddress, int size){
 		//System.out.println(fileDescriptor);
+		//System.out.println("badd" + bufferAddress);
+		//Lib.debug(dbgProcess,"\nbadd" + bufferAddress);
     	OpenFile file;
 		/*if(fileDescriptor < 0 || fileDescriptor > 16){
 			return -1;
@@ -467,7 +475,8 @@ public class UserProcess {
 			file = fileDescriptors[fileDescriptor];
 		}*/
 
-		if(fileDescriptor != 0 || size < 0 || stdin == null){
+		if(fileDescriptor != 0 || size < 0 || stdin == null || bufferAddress < 0){
+			//Lib.debug(dbgProcess,"\nin if1 retunring");
 			return -1;
 		}
 		file = stdin;
@@ -475,8 +484,9 @@ public class UserProcess {
 		int length, count;
 		byte[] buffer = new byte[size];
 		length = file.read(buffer, 0, size);
-
+		//Lib.debug(dbgProcess,"\nread len " + length);
 		if(length == -1){
+			//Lib.debug(dbgProcess,"\nin if2 read len " + length);
 			return -1;
 		}
 		count = writeVirtualMemory(bufferAddress, buffer, 0, size);
@@ -508,12 +518,106 @@ public class UserProcess {
 		int length, count;
 		byte[] buffer = new byte[size];
 		length = readVirtualMemory(bufferAddress, buffer, 0, size);
+		//Lib.debug(dbgProcess," write len " + length);
 		if(length == -1){
 			return -1;
 		}
 
 		count = file.write(buffer, 0, size);
 		return count;
+	}
+
+	private int handleExec(int fileNameAddress, int argc, int argvAddress){
+    	if(fileNameAddress < 0 || argc < 0 || argvAddress < 0)
+    		return -1;
+
+    	String fileName = readVirtualMemoryString(fileNameAddress,256);
+
+    	if(fileName == null || !fileName.endsWith(".coff"))
+    		return -1;
+
+		String[] argv = new String[argc];
+		for (int i=0; i<argc; i++){
+			byte[] argBuffer = new byte[4];
+			if(readVirtualMemory(argvAddress * i * 4,argBuffer) != 4)
+				return -1;
+			int argAddress = Lib.bytesToInt(argBuffer,0,4);
+			String arg = readVirtualMemoryString(argAddress,256);
+			if(arg == null)
+				return -1;
+			argv[i] = arg;
+		}
+
+		UserProcess child = new UserProcess();
+
+		if(!child.execute(fileName, argv)){
+			return -1;
+		}
+
+		child.parent = this;
+		children.add(child);
+    	return child.processID;
+	}
+
+	private int handleJoin(int processID, int exitStatusVirtualAddress){
+    	if(processID < 0 || exitStatusVirtualAddress < 0){
+    		return -1;
+		}
+		UserProcess child = null;
+    	for (int i=0; i<children.size(); i++){
+    		if(children.get(i).processID == processID){
+    			child = children.get(i);
+    			break;
+			}
+		}
+
+    	if(child == null)
+    		return -1;
+
+		child.myThread.join();
+
+		statudLock.acquire();
+		Integer status = childrenStatusMap.get(child.processID);
+		statudLock.release();
+
+		if(status == null){
+			return -1;
+		}
+		else {
+			byte[] buffer = new byte[4];
+			buffer = Lib.bytesFromInt(status);
+			if (writeVirtualMemory(exitStatusVirtualAddress,buffer) == 4){
+				return 1;
+			}
+			else
+				return 0;
+		}
+
+	}
+
+	private void handleExit(int status){
+		if(parent != null){
+			parent.statudLock.acquire();
+			parent.childrenStatusMap.put(this.processID, status);
+			parent.statudLock.release();
+		}
+
+		unloadSections();
+		stdin = null;
+		stdout = null;
+		for (UserProcess child: children) {
+			child.parent = null;
+		}
+
+		children.clear();
+		UserProcess.running--;
+		if (processID == 0 || running == 0){
+			Kernel.kernel.terminate();
+		}
+		else {
+			UThread.finish();
+		}
+
 	}
 
 
@@ -567,6 +671,16 @@ public class UserProcess {
 
 		case syscallWrite:
 			return handleWrite(a0, a1, a2);
+
+		case syscallExec:
+			return handleExec(a0, a1, a2);
+
+		case syscallJoin:
+			return handleJoin(a0, a1);
+
+		case syscallExit:
+			handleExit(a0);
+			return 0;
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -627,7 +741,14 @@ public class UserProcess {
 	private OpenFile stdout;
     private Lock lock;
     private static int counter = 0;
+    private static int running = 0;
     private int processID = 0;
+    private UThread myThread;
 
+    private UserProcess parent = null;
+    private ArrayList<UserProcess> children = new ArrayList<>();
+
+	private Lock statudLock = new Lock();
+	private HashMap<Integer, Integer> childrenStatusMap = new HashMap<>();
     private final int stackPageSize = 8;
 }
