@@ -326,9 +326,9 @@ public class UserProcess {
 	for (int s=0; s<coff.getNumSections(); s++) {
 	    CoffSection section = coff.getSection(s);
 	    if (section.getFirstVPN() != numPages) {
-		coff.close();
-		Lib.debug(dbgProcess, "\tfragmented executable");
-		return false;
+			coff.close();
+			Lib.debug(dbgProcess, "\tfragmented executable");
+			return false;
 	    }
 	    numPages += section.getLength();
 	}
@@ -354,6 +354,16 @@ public class UserProcess {
 		for (int i = 0; i < stackPages; ++i) {
 			int vpn = numPages + i;
 			int ppn = UserKernel.assign();
+			if(ppn == -1)
+			{
+				for(int pt=0;pt<pageTable.length;pt++)
+				{
+					UserKernel.freePage(pageTable[pt].ppn);
+					pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
+				}
+				numPages =0;
+				return false;
+			}
 			pageTable[vpn] = new TranslationEntry(vpn, ppn, true, false, false, false);
 		}
 
@@ -362,7 +372,18 @@ public class UserProcess {
 	initialSP = numPages*pageSize;
 
 	// and finally reserve 1 page for arguments
-		pageTable[numPages] = new TranslationEntry(numPages, UserKernel.assign(), true, false, false, false);
+		int argPPN = UserKernel.assign();
+		if(argPPN == -1)
+		{
+			for(int pt=0;pt<pageTable.length;pt++)
+			{
+				UserKernel.freePage(pageTable[pt].ppn);
+				pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
+			}
+			numPages = 0;
+			return false;
+		}
+		pageTable[numPages] = new TranslationEntry(numPages, argPPN, true, false, false, false);
 	numPages++;
 
 	if (!loadSections())
@@ -385,6 +406,7 @@ public class UserProcess {
 	    Lib.assertTrue(writeVirtualMemory(stringOffset,new byte[] { 0 }) == 1);
 	    stringOffset += 1;
 	}
+
 
 	return true;
     }
@@ -413,6 +435,16 @@ public class UserProcess {
 	    for (int i=0; i<section.getLength(); i++) {
 		int vpn = section.getFirstVPN()+i;
 		int ppn = UserKernel.assign();
+		if(ppn == -1)
+		{
+			for(int pt=0;pt<pageTable.length;pt++)
+			{
+				UserKernel.freePage(pageTable[pt].ppn);
+				pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
+			}
+			numPages =0;
+			return false;
+		}
 		pageTable[vpn] = new TranslationEntry(vpn, ppn, true, section.isReadOnly(), false, false);
 
 		// for now, just assume virtual addresses=physical addresses
@@ -488,18 +520,7 @@ public class UserProcess {
 		//System.out.println("badd" + bufferAddress);
 		//Lib.debug(dbgProcess,"\nbadd" + bufferAddress);
     	OpenFile file;
-		/*if(fileDescriptor < 0 || fileDescriptor > 16){
-			return -1;
-		}
-		else if(size < 0){
-			return -1;
-		}
-		else if(fileDescriptors[fileDescriptor] == null){
-			return -1;
-		}
-		else {
-			file = fileDescriptors[fileDescriptor];
-		}*/
+
 
 //
 		if(fileDescriptor != 0 || size < 0 || stdin == null|| bufferAddress < 0 ){
@@ -523,18 +544,7 @@ public class UserProcess {
 	private int handleWrite(int fileDescriptor, int bufferAddress, int size){
 		//System.out.println(fileDescriptor);
 		OpenFile file;
-		/*if(fileDescriptor < 0 || fileDescriptor > 16){
-			return -1;
-		}
-		else if(size < 0){
-			return -1;
-		}
-		else if(fileDescriptors[fileDescriptor] == null){
-			return -1;
-		}
-		else {
-			file = fileDescriptors[fileDescriptor];
-		}*/
+
 
 		if(fileDescriptor != 1 || size < 0 || stdout == null){
 			return -1;
