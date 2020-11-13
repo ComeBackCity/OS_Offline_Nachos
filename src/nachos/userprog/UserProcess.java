@@ -26,8 +26,8 @@ public class UserProcess {
     public UserProcess() {
 	int numPhysPages = Machine.processor().getNumPhysPages();
 	pageTable = new TranslationEntry[numPhysPages];
-	for (int i=0; i<numPhysPages; i++)
-	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+	/*for (int i=0; i<numPhysPages; i++)
+	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);*/
 
 		//fileDescriptors = new OpenFile[16];
 		lock = new Lock();
@@ -351,10 +351,18 @@ public class UserProcess {
 	initialPC = coff.getEntryPoint();	
 
 	// next comes the stack; stack pointer initially points to top of it
+		for (int i = 0; i < stackPages; ++i) {
+			int vpn = numPages + i;
+			int ppn = UserKernel.assign();
+			pageTable[vpn] = new TranslationEntry(vpn, ppn, true, false, false, false);
+		}
+
+
 	numPages += stackPages;
 	initialSP = numPages*pageSize;
 
 	// and finally reserve 1 page for arguments
+		pageTable[numPages] = new TranslationEntry(numPages, UserKernel.assign(), true, false, false, false);
 	numPages++;
 
 	if (!loadSections())
@@ -419,20 +427,24 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
-		for (int i=0; i<pageTable.length; i++){
-			int ppn = pageTable[i].ppn;
-			UserKernel.freePage(ppn);
-			pageTable[i] = new TranslationEntry(i, i, false, false, false, false);
-		}
+		//System.out.println("Unloading happned");
+    	deallocatePageTable();
 		numPages = 0;
 		stdin.close();
 		stdout.close();
 		stdin = null;
 		stdout = null;
 		coff.close();
-
     }    
 
+    public void deallocatePageTable(){
+		//System.out.println("printing pt length before deallocation" + pageTable.length);
+		for (int i=0; i<numPages; i++){
+			int ppn = pageTable[i].ppn;
+			UserKernel.freePage(ppn);
+			pageTable[i] = new TranslationEntry(i, i, true, false, false, false);
+		}
+	}
     /**
      * Initialize the processor's registers in preparation for running the
      * program loaded into this process. Set the PC register to point at the
@@ -555,17 +567,17 @@ public class UserProcess {
 		String[] argv = new String[argc];
 		for (int i=0; i<argc; i++){
 			byte[] argBuffer = new byte[4];
-			System.out.println("into loop i: " + i);
+			//System.out.println("into loop i: " + i);
 			if(readVirtualMemory(argvAddress + i * 4,argBuffer) != 4)
 				return -1;
 			int argAddress = Lib.bytesToInt(argBuffer,0);
-			System.out.println("arg Address: " + argAddress);
+			//System.out.println("arg Address: " + argAddress);
 
 			String arg = readVirtualMemoryString(argAddress,256);
 
-			System.out.println("loop i: "+i+" arg: "+arg);
+			//System.out.println("loop i: "+i+" arg: "+arg);
 			if(arg == null) {
-				System.out.println("returning form here");
+				//.out.println("returning form here");
 				return -1;
 			}
 			argv[i] = arg;
@@ -605,6 +617,7 @@ public class UserProcess {
 		statudLock.release();
 
 		if(status == null){
+			child.deallocatePageTable();
 			return -1;
 		}
 		else {
@@ -613,13 +626,16 @@ public class UserProcess {
 			if (writeVirtualMemory(exitStatusVirtualAddress,buffer) == 4){
 				return 1;
 			}
-			else
+			else {
+				child.deallocatePageTable();
 				return 0;
+			}
 		}
 
 	}
 
 	private void handleExit(int status){
+		//System.out.println("Normal exit");
 		if(parent != null){
 			parent.statudLock.acquire();
 			parent.childrenStatusMap.put(this.processID, status);
@@ -774,4 +790,5 @@ public class UserProcess {
 	private Lock statudLock = new Lock();
 	private HashMap<Integer, Integer> childrenStatusMap = new HashMap<>();
     private final int stackPageSize = 8;
+    private boolean alreadyUnloaded = false;
 }

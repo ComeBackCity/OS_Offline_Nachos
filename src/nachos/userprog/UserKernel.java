@@ -124,12 +124,14 @@ public class UserKernel extends ThreadedKernel {
 		}
     	pageLock.acquire();
     	int pageNo = freePhysicalPages.pollFirst();
+		//System.out.println("Allocating page " + pageNo);
     	pageLock.release();
     	return pageNo;
 	}
 
 	public static void freePage(int pageNo){
     	pageLock.acquire();
+		//System.out.println("Deallocating pageNo " + pageNo);
     	freePhysicalPages.add(pageNo);
     	pageLock.release();
 	}
