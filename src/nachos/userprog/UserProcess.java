@@ -109,9 +109,13 @@ public class UserProcess {
 
 	int bytesRead = readVirtualMemory(vaddr, bytes);
 
-	for (int length=0; length<bytesRead; length++) {
-	    if (bytes[length] == 0)
-		return new String(bytes, 0, length);
+	for (int length=0; length<bytesRead; length++)
+	{
+	    if (bytes[length] == 0) {
+//	    	String s = new String(bytes,0,length);
+//			System.out.println("s: "+s + " s end");
+	    	return new String(bytes, 0, length);
+		}
 	}
 
 	return null;
@@ -143,15 +147,17 @@ public class UserProcess {
      *			the array.
      * @return	the number of bytes successfully transferred.
      */
-    public int readVirtualMemory(int vaddr, byte[] data, int offset,
-				 int length) {
-	Lib.assertTrue(offset >= 0 && length >= 0 && offset+length <= data.length);
+    public int readVirtualMemory(int vaddr, byte[] data, int offset, int length) {
+		Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
 
-	if(numPages == 0 || pageTable == null){
-		return 0;
-	}
+		//System.out.println("after vaddr : " + vaddr);
 
-	byte[] memory = Machine.processor().getMemory();
+		if (numPages == 0 || pageTable == null) {
+//			System.out.println("returning 1");
+			return -1;
+		}
+
+		byte[] memory = Machine.processor().getMemory();
 
 		int amount = 0;
 		int readAmount = 0;
@@ -159,37 +165,35 @@ public class UserProcess {
 		int endPage = Processor.pageFromAddress(vaddr + length - 1);
 		int endVaddr = vaddr + length - 1;
 
-	// for now, just assume that virtual addresses equal physical addresses
+		// for now, just assume that virtual addresses equal physical addresses
 	/*if (vaddr < 0 || vaddr >= memory.length)
 	    return 0;*/
-
-		if(vaddr < 0 || endVaddr > Processor.makeAddress(numPages-1, pageSize-1))
-			return 0;
+		if (vaddr < 0 || endVaddr > Processor.makeAddress(numPages - 1, pageSize - 1)) {
+//			System.out.println("returning 2");
+			return -1;
+		}
 
 	/*int amount = Math.min(length, memory.length-vaddr);
 	System.arraycopy(memory, vaddr, data, offset, amount);*/
 
-		for (int i= startPage; i<= endPage; i++){
-			if(i>pageTable.length || !pageTable[i].valid)
+		for (int i = startPage; i <= endPage; i++) {
+			if (i > pageTable.length || !pageTable[i].valid)
 				break;
 
-			int startAddress = Processor.makeAddress(i,0);
-			int endAddress = Processor.makeAddress(i,pageSize-1);
+			int startAddress = Processor.makeAddress(i, 0);
+			int endAddress = Processor.makeAddress(i, pageSize - 1);
 			readAmount = 0;
 			int addressOffset = 0;
-			if (vaddr >= startAddress && endVaddr <= endAddress){
+			if (vaddr >= startAddress && endVaddr <= endAddress) {
 				addressOffset = vaddr - startAddress;
 				readAmount = endVaddr - vaddr + 1;
-			}
-			else if (vaddr < startAddress && endVaddr <= endAddress){
+			} else if (vaddr < startAddress && endVaddr <= endAddress) {
 				addressOffset = 0;
 				readAmount = endVaddr - startAddress + 1;
-			}
-			else if(vaddr >= startAddress && endVaddr > endAddress){
+			} else if (vaddr >= startAddress && endVaddr > endAddress) {
 				addressOffset = vaddr - startAddress;
 				readAmount = endAddress - vaddr + 1;
-			}
-			else if(vaddr < startAddress && endVaddr > endAddress){
+			} else if (vaddr < startAddress && endVaddr > endAddress) {
 				addressOffset = 0;
 				readAmount = endAddress - startAddress + 1;
 			}
@@ -199,8 +203,8 @@ public class UserProcess {
 			amount += readAmount;
 		}
 
-	return amount;
-    }
+		return amount;
+	}
 
     /**
      * Transfer all data from the specified array to this process's virtual
@@ -250,8 +254,9 @@ public class UserProcess {
 
 
 	// for now, just assume that virtual addresses equal physical addresses
-		if(vaddr < 0 || endVaddr > Processor.makeAddress(numPages-1, pageSize-1))
-			return 0;
+		if(vaddr < 0 || endVaddr > Processor.makeAddress(numPages-1, pageSize-1)) {
+			return -1;
+		}
 
 	/*int amount = Math.min(length, memory.length-vaddr);
 	System.arraycopy(data, offset, memory, vaddr, amount);*/
@@ -419,6 +424,13 @@ public class UserProcess {
 			UserKernel.freePage(ppn);
 			pageTable[i] = new TranslationEntry(i, i, false, false, false, false);
 		}
+		numPages = 0;
+		stdin.close();
+		stdout.close();
+		stdin = null;
+		stdout = null;
+		coff.close();
+
     }    
 
     /**
@@ -449,8 +461,10 @@ public class UserProcess {
      */
     private int handleHalt() {
 
-    	if(processID != 1)
-    		return -1;
+    	if(processID != 1) {
+			return -1;
+		}
+
 	Machine.halt();
 	
 	Lib.assertNotReached("Machine.halt() did not halt machine!");
@@ -475,7 +489,8 @@ public class UserProcess {
 			file = fileDescriptors[fileDescriptor];
 		}*/
 
-		if(fileDescriptor != 0 || size < 0 || stdin == null || bufferAddress < 0){
+//
+		if(fileDescriptor != 0 || size < 0 || stdin == null|| bufferAddress < 0 ){
 			//Lib.debug(dbgProcess,"\nin if1 retunring");
 			return -1;
 		}
@@ -484,7 +499,7 @@ public class UserProcess {
 		int length, count;
 		byte[] buffer = new byte[size];
 		length = file.read(buffer, 0, size);
-		//Lib.debug(dbgProcess,"\nread len " + length);
+
 		if(length == -1){
 			//Lib.debug(dbgProcess,"\nin if2 read len " + length);
 			return -1;
@@ -528,6 +543,7 @@ public class UserProcess {
 	}
 
 	private int handleExec(int fileNameAddress, int argc, int argvAddress){
+
     	if(fileNameAddress < 0 || argc < 0 || argvAddress < 0)
     		return -1;
 
@@ -539,14 +555,22 @@ public class UserProcess {
 		String[] argv = new String[argc];
 		for (int i=0; i<argc; i++){
 			byte[] argBuffer = new byte[4];
-			if(readVirtualMemory(argvAddress * i * 4,argBuffer) != 4)
+			System.out.println("into loop i: " + i);
+			if(readVirtualMemory(argvAddress + i * 4,argBuffer) != 4)
 				return -1;
-			int argAddress = Lib.bytesToInt(argBuffer,0,4);
+			int argAddress = Lib.bytesToInt(argBuffer,0);
+			System.out.println("arg Address: " + argAddress);
+
 			String arg = readVirtualMemoryString(argAddress,256);
-			if(arg == null)
+
+			System.out.println("loop i: "+i+" arg: "+arg);
+			if(arg == null) {
+				System.out.println("returning form here");
 				return -1;
+			}
 			argv[i] = arg;
 		}
+
 
 		UserProcess child = new UserProcess();
 
@@ -603,15 +627,14 @@ public class UserProcess {
 		}
 
 		unloadSections();
-		stdin = null;
-		stdout = null;
+
 		for (UserProcess child: children) {
 			child.parent = null;
 		}
 
 		children.clear();
 		UserProcess.running--;
-		if (processID == 0 || running == 0){
+		if (processID == 1 || running == 0){
 			Kernel.kernel.terminate();
 		}
 		else {
