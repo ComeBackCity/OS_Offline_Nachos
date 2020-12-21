@@ -3,27 +3,27 @@ package nachos.vm;
 import java.util.Objects;
 
 public class iptKey {
-    Integer vpn;
-    Integer processID;
+    int vpn;
+    int processID;
 
-    public iptKey(Integer vpn, Integer processID) {
+    public iptKey(int vpn, int processID) {
         this.vpn = vpn;
         this.processID = processID;
     }
 
-    public Integer getVpn() {
+    public int getVpn() {
         return vpn;
     }
 
-    public void setVpn(Integer vpn) {
+    public void setVpn(int vpn) {
         this.vpn = vpn;
     }
 
-    public Integer getProcessID() {
+    public int getProcessID() {
         return processID;
     }
 
-    public void setProcessID(Integer processID) {
+    public void setProcessID(int processID) {
         this.processID = processID;
     }
 
@@ -32,11 +32,11 @@ public class iptKey {
         if (this == o) return true;
         if (!(o instanceof iptKey)) return false;
         iptKey iptKey = (iptKey) o;
-        return Objects.equals(vpn, iptKey.vpn) && Objects.equals(processID, iptKey.processID);
+        return getVpn() == iptKey.getVpn() && getProcessID() == iptKey.getProcessID();
     }
 
     @Override
     public int hashCode() {
-        return vpn * 1000 + processID;
+        return Objects.hash(getVpn(), getProcessID());
     }
 }

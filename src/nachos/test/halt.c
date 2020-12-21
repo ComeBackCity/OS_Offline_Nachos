@@ -17,7 +17,7 @@ int main()
     printf("halt started!\n");
     printf("halt prints a line.\n");
     printf("halt prints another line.\n");
-    printf("halt tries to halt Nachos\n");
+    //printf("halt tries to halt Nachos\n");
     halt();
     printf("Nachos not halted!\n");
     return 0;

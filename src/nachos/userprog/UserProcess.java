@@ -150,10 +150,7 @@ public class UserProcess {
     public int readVirtualMemory(int vaddr, byte[] data, int offset, int length) {
 		Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
 
-		//System.out.println("after vaddr : " + vaddr);
-
 		if (numPages == 0 || pageTable == null) {
-//			System.out.println("returning 1");
 			return -1;
 		}
 
@@ -165,16 +162,11 @@ public class UserProcess {
 		int endPage = Processor.pageFromAddress(vaddr + length - 1);
 		int endVaddr = vaddr + length - 1;
 
-		// for now, just assume that virtual addresses equal physical addresses
-	/*if (vaddr < 0 || vaddr >= memory.length)
-	    return 0;*/
+
 		if (vaddr < 0 || endVaddr > Processor.makeAddress(numPages - 1, pageSize - 1)) {
-//			System.out.println("returning 2");
 			return -1;
 		}
 
-	/*int amount = Math.min(length, memory.length-vaddr);
-	System.arraycopy(memory, vaddr, data, offset, amount);*/
 
 		for (int i = startPage; i <= endPage; i++) {
 			if (i > pageTable.length || !pageTable[i].valid)
@@ -303,7 +295,7 @@ public class UserProcess {
      * @param	args	the arguments to pass to the executable.
      * @return	<tt>true</tt> if the executable was successfully loaded.
      */
-    private boolean load(String name, String[] args) {
+    public boolean load(String name, String[] args) {
 	Lib.debug(dbgProcess, "UserProcess.load(\"" + name + "\")");
 	
 	OpenFile executable = ThreadedKernel.fileSystem.open(name, false);
@@ -332,7 +324,7 @@ public class UserProcess {
 	    }
 	    numPages += section.getLength();
 	}
-	codeSectionSize = numPages;
+
 	// make sure the argv array will fit in one page
 	byte[][] argv = new byte[args.length][];
 	int argsSize = 0;
@@ -351,39 +343,39 @@ public class UserProcess {
 	initialPC = coff.getEntryPoint();	
 
 	// next comes the stack; stack pointer initially points to top of it
-//		for (int i = 0; i < stackPages; ++i) {
-//			int vpn = numPages + i;
-//			int ppn = UserKernel.assign();
-//			if(ppn == -1)
-//			{
-//				for(int pt=0;pt<pageTable.length;pt++)
-//				{
-//					UserKernel.freePage(pageTable[pt].ppn);
-//					pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
-//				}
-//				numPages =0;
-//				return false;
-//			}
-//			pageTable[vpn] = new TranslationEntry(vpn, ppn, true, false, false, false);
-//		}
+		for (int i = 0; i < stackPages; ++i) {
+			int vpn = numPages + i;
+			int ppn = UserKernel.assign();
+			if(ppn == -1)
+			{
+				for(int pt=0;pt<pageTable.length;pt++)
+				{
+					UserKernel.freePage(pageTable[pt].ppn);
+					pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
+				}
+				numPages =0;
+				return false;
+			}
+			pageTable[vpn] = new TranslationEntry(vpn, ppn, true, false, false, false);
+		}
 
 
 	numPages += stackPages;
 	initialSP = numPages*pageSize;
 
 	// and finally reserve 1 page for arguments
-//		int argPPN = UserKernel.assign();
-//		if(argPPN == -1)
-//		{
-//			for(int pt=0;pt<pageTable.length;pt++)
-//			{
-//				UserKernel.freePage(pageTable[pt].ppn);
-//				pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
-//			}
-//			numPages = 0;
-//			return false;
-//		}
-//		pageTable[numPages] = new TranslationEntry(numPages, argPPN, true, false, false, false);
+		int argPPN = UserKernel.assign();
+		if(argPPN == -1)
+		{
+			for(int pt=0;pt<pageTable.length;pt++)
+			{
+				UserKernel.freePage(pageTable[pt].ppn);
+				pageTable[pt] = new TranslationEntry(pageTable[pt].vpn,0,false,false,false,false);
+			}
+			numPages = 0;
+			return false;
+		}
+		pageTable[numPages] = new TranslationEntry(numPages, argPPN, true, false, false, false);
 	numPages++;
 
 	if (!loadSections())
@@ -519,41 +511,30 @@ public class UserProcess {
 		//System.out.println(fileDescriptor);
 		//System.out.println("badd" + bufferAddress);
 		//Lib.debug(dbgProcess,"\nbadd" + bufferAddress);
-		//System.out.println("Entering handleRead");
     	OpenFile file;
 
-		//System.out.println("hr 1");
+
 //
 		if(fileDescriptor != 0 || size < 0 || stdin == null|| bufferAddress < 0 ){
 			//Lib.debug(dbgProcess,"\nin if1 retunring");
-			//System.out.println("Other -1 return");
 			return -1;
 		}
 		file = stdin;
 
-		//System.out.println("hr 2");
-
 		int length, count;
 		byte[] buffer = new byte[size];
 		length = file.read(buffer, 0, size);
-		//System.out.println("hr 3");
-		//System.out.println(length);
-		if(length == -1 || length == 0){
+
+		if(length == -1){
 			//Lib.debug(dbgProcess,"\nin if2 read len " + length);
-			//System.out.println("length = -1");
 			return -1;
 		}
-		//System.out.println("hr 4");
-
 		count = writeVirtualMemory(bufferAddress, buffer, 0, size);
-		//System.out.println("Exiting handleRead");
     	return count;
-
 	}
 
 	private int handleWrite(int fileDescriptor, int bufferAddress, int size){
 		//System.out.println(fileDescriptor);
-		//System.out.println("Entering handleWrite");
 		OpenFile file;
 
 
@@ -572,7 +553,6 @@ public class UserProcess {
 		}
 
 		count = file.write(buffer, 0, size);
-		//System.out.println("Exiting handleWrite");
 		return count;
 	}
 
@@ -728,6 +708,7 @@ public class UserProcess {
 	    return handleHalt();
 
 		case syscallRead:
+			//System.out.println(a0 + " " + a1 + " " + a2);
 			return handleRead(a0,a1,a2);
 
 		case syscallWrite:
@@ -805,7 +786,6 @@ public class UserProcess {
     private static int running = 0;
     protected int processID = 0;
     private UThread myThread;
-    protected int codeSectionSize = -1;
 
     private UserProcess parent = null;
     private ArrayList<UserProcess> children = new ArrayList<>();
